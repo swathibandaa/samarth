@@ -11,8 +11,8 @@ st.set_page_config(page_title="Project Samarth - Agriculture & Climate Insights"
 # -----------------------------------
 # Dataset Paths
 # -----------------------------------
-AGRI_PATH = "data/agriculture.csv"       # your APY dataset
-RAINFALL_PATH = "data/rainfall.csv"      # your IMD dataset
+AGRI_PATH = "agriculture.csv"       
+RAINFALL_PATH = "rainfall.csv"      
 
 # -----------------------------------
 # Load Datasets
@@ -166,3 +166,4 @@ st.markdown("""
 - Compare average rainfall between Tamil Nadu and Kerala  
 - Find production of Rice in Andhra Pradesh for 2019  
 """)
+
