@@ -11,21 +11,43 @@ st.set_page_config(page_title="Project Samarth - Agriculture & Climate Insights"
 # -----------------------------------
 # Dataset Paths
 # -----------------------------------
-AGRI_PATH = "crop.csv"       
-RAINFALL_PATH = "rainfall.csv"      
+AGRI_PATH = "crop.csv"
+RAINFALL_PATH = "rainfall.csv"
 
 # -----------------------------------
-# Load Datasets
+# Load Datasets (with cleanup)
 # -----------------------------------
 @st.cache_data
 def load_data():
-    agri = pd.read_csv(AGRI_PATH)
-    rain = pd.read_csv(RAINFALL_PATH)
+    # --- Load agriculture data ---
+    agri = pd.read_csv(AGRI_PATH, encoding='utf-8', on_bad_lines='skip')
+    agri.columns = [c.strip() for c in agri.columns]
+
+    # --- Load rainfall data safely ---
+    rain = pd.read_csv(RAINFALL_PATH, encoding='utf-8', sep=',', on_bad_lines='skip')
+    rain.columns = [c.strip().upper() for c in rain.columns]
+
+    # Fix column naming variations
+    if 'SUBDIVISION' not in rain.columns and 'SUBDIVISION ' in rain.columns:
+        rain.rename(columns={'SUBDIVISION ': 'SUBDIVISION'}, inplace=True)
+    if 'YEAR' not in rain.columns and 'Year' in rain.columns:
+        rain.rename(columns={'Year': 'YEAR'}, inplace=True)
+
+    # Ensure YEAR is numeric
+    rain['YEAR'] = pd.to_numeric(rain['YEAR'], errors='coerce')
+
+    # Compute ANNUAL if missing
+    if 'ANNUAL' not in rain.columns:
+        month_cols = [m for m in ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'] if m in rain.columns]
+        rain['ANNUAL'] = rain[month_cols].sum(axis=1)
+
     return agri, rain
 
+
+# Load data
 agri_df, rain_df = load_data()
 
-# Normalize column names (keep original)
+# Normalize column names
 agri_df.columns = [c.strip() for c in agri_df.columns]
 rain_df.columns = [c.strip() for c in rain_df.columns]
 
@@ -44,7 +66,6 @@ def extract_states(query):
         if s.lower() in query.lower():
             found.append(s)
     if not found:
-        # Try fuzzy match
         tokens = re.findall(r"[A-Z][a-z]+", query)
         for t in tokens:
             match = fuzzy_match_state(t)
@@ -67,8 +88,8 @@ def extract_year(query):
     years = re.findall(r"(20\d{2})", query)
     if years:
         return int(years[-1])
-    # Default: latest year
     return int(agri_df["Crop_Year"].max())
+
 
 # -----------------------------------
 # Core Q&A Logic
@@ -110,7 +131,6 @@ def answer_query(query):
             if subset.empty:
                 continue
 
-            # Top crops by production
             top_crops = (
                 subset.groupby("Crop")["Production"]
                 .sum()
@@ -120,7 +140,7 @@ def answer_query(query):
             crops_str = ", ".join([f"{c} ({p:.1f} tonnes)" for c, p in top_crops.items()])
             answer_lines.append(f"🌾 Top {top_n} crops in **{s}** for {year}: {crops_str}")
             provenance.append({
-                "dataset": "agriculture.csv",
+                "dataset": "crop.csv",
                 "filter": f"State == '{s}', Crop_Year == {year}",
                 "code": f"agri_df[(agri_df['State'].str.contains('{s}')) & (agri_df['Crop_Year']=={year})].groupby('Crop')['Production'].sum().sort_values(ascending=False).head({top_n})"
             })
@@ -135,6 +155,7 @@ def answer_query(query):
         for p in provenance
     ])
     return final_answer, prov_block
+
 
 # -----------------------------------
 # STREAMLIT UI
@@ -166,5 +187,3 @@ st.markdown("""
 - Compare average rainfall between Tamil Nadu and Kerala  
 - Find production of Rice in Andhra Pradesh for 2019  
 """)
-
-
